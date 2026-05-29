@@ -1,0 +1,750 @@
+// src/App.jsx
+
+import React, { useEffect, useState, useRef } from "react";
+
+/* ---------------- GOOGLE SHEET ---------------- */
+const SHEET_URL =
+  "https://docs.google.com/spreadsheets/d/1oC3gLe7gQniz2_86zHzO1BcAU51lHUFLMwRTfVmBK4Q/gviz/tq?tqx=out:json";
+// BASE BRANDS + หมวดหลักสำหรับแท็บหน้า BRANDS
+const BASE_BRANDS = [
+  { slug: "crying-center", name: "CRYING CENTER", logo: "/brands/crying-center.png", category: "CLOTHING" },
+  { slug: "whoosis", name: "WHOOSIS", logo: "/brands/whoosis.png", category: "CLOTHING" },
+  { slug: "young-stage", name: "YOUNG STAGE", logo: "/brands/young-stage.png", category: "CLOTHING" },
+  { slug: "cgga-amass", name: "CGGA AMASS", logo: "/brands/cgga-amass.png", category: "CLOTHING" },
+  { slug: "oisis", name: "OISIS", logo: "/brands/oisis.png", category: "CLOTHING" },
+  { slug: "tired-studio", name: "TIRED STUDIO", logo: "/brands/tired-studio.png", category: "CLOTHING" },
+  { slug: "achork", name: "ACHORK", logo: "/brands/achork.png", category: "CLOTHING" },
+  { slug: "blacklists", name: "BLACKLISTS", logo: "/brands/blacklists.png", category: "CLOTHING" },
+  { slug: "owox", name: "OWOX", logo: "/brands/owox.png", category: "CLOTHING" },
+  { slug: "0123start", name: "0123START", logo: "/brands/0123start.png", category: "CLOTHING" },
+  { slug: "yadcrew", name: "YADCREW", logo: "/brands/yadcrew.png", category: "CLOTHING" },
+  { slug: "bjhg", name: "BJHG", logo: "/brands/bjhg.png", category: "CLOTHING" },
+  { slug: "apocket", name: "APOCKET", logo: "/brands/apocket.png", category: "CLOTHING" },
+
+  // SHOES
+  { slug: "adidas", name: "ADIDAS", logo: "/brands/adidas.png", category: "SHOES" },
+  { slug: "puma", name: "PUMA", logo: "/brands/puma.png", category: "SHOES" },
+  { slug: "vans", name: "VANS", logo: "/brands/vans.png", category: "SHOES" },
+  { slug: "jeep", name: "JEEP", logo: "/brands/jeep.png", category: "SHOES" },
+  { slug: "devo-life", name: "DEVO LIFE", logo: "/brands/devo-life.png", category: "SHOES" },
+  { slug: "mianmaomi", name: "MIANMAOMI", logo: "/brands/mianmaomi.png", category: "SHOES" },
+
+  // BAG / ACCESSORIES / OTHER
+  { slug: "lee", name: "LEE", logo: "/brands/lee.png", category: "BAG" },
+  { slug: "jandress", name: "JANDRESS", logo: "/brands/jandress.png", category: "BAG" },
+  { slug: "smosmos", name: "SMOSMOS", logo: "/brands/smosmos.png", category: "BAG" },
+  { slug: "oogreenapple", name: "OOGREENAPPLE", logo: "/brands/oogreenapple.png", category: "BAG" },
+  { slug: "tipseven", name: "TIPSEVEN", logo: "/brands/tipseven.png", category: "ACCESSORIES" },
+  { slug: "dickies", name: "DICKIES", logo: "/brands/dickies.png", category: "ACCESSORIES" },
+  { slug: "monchhichi", name: "MONCHHICHI", logo: "/brands/monchhichi.png", category: "ACCESSORIES" },
+  { slug: "chichaboom", name: "CHICHABOOM", logo: "/brands/chichaboom.png", category: "ACCESSORIES" },
+  { slug: "onionion", name: "ONIONION", logo: "/brands/onionion.png", category: "ACCESSORIES" },
+  { slug: "sorgenti", name: "SORGENTI", logo: "/brands/sorgenti.png", category: "ACCESSORIES" },
+  { slug: "marsh&mellow", name: "MARSH&MELLOW", logo: "/brands/marsh&mellow.png", category: "ACCESSORIES" },
+  { slug: "tidecolor", name: "TIDECOLOR", logo: "/brands/tidecolor.png", category: "ACCESSORIES" },
+  { slug: "lunier", name: "LUNIER", logo: "/brands/lunier.png", category: "ACCESSORIES" },
+  { slug: "dar1ng", name: "Dar1ng", logo: "/brands/dar1ng.png", category: "ACCESSORIES" },
+  { slug: "tbh", name: "TBH", logo: "/brands/tbh.png", category: "OTHER" },
+  { slug: "martube", name: "MARTUBE", logo: "/brands/martube.png", category: "OTHER" },
+  { slug: "jueves", name: "JUEVES", logo: "/brands/jueves.png", category: "OTHER" },
+  { slug: "oops-day", name: "OOPS-DAY", logo: "/brands/oops-day.png", category: "OTHER" },
+  { slug: "rolincube", name: "ROLINCUBE", logo: "/brands/rolincube.png", category: "OTHER" },
+  { slug: "lunier", name: "LUNIER", logo: "/brands/lunier.png", category: "OTHER" },
+  { slug: "conamor", name: "CONAMOR", logo: "/brands/conamor.png", category: "OTHER" },
+];
+// CONTACT
+const CONTACT_LINKS = {
+  instagram:
+    "https://www.instagram.com/mandothing?igsh=MThwZzRkMDVwMndhMA%3D%3D&utm_source=qr",
+  tiktok:
+    "https://www.tiktok.com/@mustmissme?_t=ZS-8zYkNa7Cxmq&_r=1",
+  shopee:
+    "https://s.shopee.co.th/40ZSIbpu8v",
+  line:
+    "https://lin.ee/ssxHJ8c",
+};
+// ตัด <br> ใน details
+function parseDetails(raw) {
+  if (!raw) return [];
+  return raw
+    .split(/<br\s*\/?>/i)
+    .map((s) =>
+      s.replace(/&nbsp;/gi, " ").replace(/<\/?b>/gi, "").trim()
+    )
+    .filter(Boolean);
+}
+/* ---------------- MAIN APP ---------------- */
+function App() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [view, setView] = useState("home"); // 'home' | 'brands' | 'brand' | 'in-stock'
+  const [activeBrandSlug, setActiveBrandSlug] = useState(null);
+  useEffect(() => {
+    setLoading(true);
+    setError("");
+    fetch(SHEET_URL)
+      .then((res) => res.text())
+      .then((text) => {
+        const jsonText = text.substring(
+          text.indexOf("{"),
+          text.lastIndexOf("}") + 1
+        );
+        const gviz = JSON.parse(jsonText);
+        const rows = gviz.table?.rows || [];
+        const brandsMap = {};
+        // ตั้งค่าแบรนด์พื้นฐาน
+        BASE_BRANDS.forEach((b) => {
+          brandsMap[b.slug] = {
+            slug: b.slug,
+            name: b.name,
+            logo: b.logo,
+            brand_category: b.category || "OTHER",
+            line_link: CONTACT_LINKS.line,
+            categories: {
+              HOODIE: [],
+              SWEATER: [],
+              TOPS: [],
+              BOTTOMS: [],
+              JEANS: [],
+              BAG: [],
+              SHOES: [],
+              ACCESSORIES: [],
+              OTHER: [],
+            },
+          };
+        });
+        rows.forEach((row) => {
+          const c = row.c || [];
+          const brandSlug = (c[0]?.v || "").trim();
+          const brandName   = (c[1]?.v || "").trim(); 
+          const categoryRaw = (c[2]?.v || "").trim();
+          const sku = (c[3]?.v || "").trim();
+          const name = (c[4]?.v || "").trim();
+          const price = Number(c[5]?.v || 0);
+          const detailsRaw = (c[6]?.v || "").trim();
+          const imagesRaw = (c[7]?.v || "").trim();
+          const orderLinkRaw = (c[8]?.v || "").trim();
+          const inStock = Number(c[9]?.v || 0); // IN-STOCK
+          const bestSeller = Number(c[10]?.v || 0);
+          if (!brandSlug || brandSlug === "brand_slug") return;
+          if (!sku || !name) return;
+          if (!brandsMap[brandSlug]) {
+            brandsMap[brandSlug] = {
+              slug: brandSlug,
+              name: brandName || brandSlug,
+              logo: `/brands/${brandSlug}.png`,
+              brand_category: "OTHER",
+              line_link: CONTACT_LINKS.line,
+              categories: {
+                HOODIE: [],
+                SWEATER: [],
+                TOPS: [],
+                BOTTOMS: [],
+                JEANS: [],
+                BAG: [],
+                SHOES: [],
+                ACCESSORIES: [],
+                OTHER: [],
+              },
+            };
+          }
+          const categoryUpper = (categoryRaw || "TOPS").toUpperCase();
+          const catKey = brandsMap[brandSlug].categories[categoryUpper]
+            ? categoryUpper
+            : "OTHER";
+          const categoryLower = categoryUpper.toLowerCase();
+          // แปลง imagesRaw -> array ของ path ที่พร้อมใช้งาน
+let images = [];
+if (imagesRaw) {
+  images = imagesRaw
+    .split(/\s*,\s*/)
+    .map((u) => u.trim())
+    .filter(Boolean)
+    .map((u) => {
+
+      // 1️⃣ URL เต็ม (Cloudinary / https)
+      if (/^https?:\/\//i.test(u)) {
+        return u;
+      }
+
+      // 2️⃣ path เต็มในเว็บ (ของเก่าที่ใส่ / มาแล้ว)
+      if (u.startsWith("/")) {
+        return u;
+      }
+
+      // 3️⃣ 🔥 ชื่อไฟล์ล้วน (ระบบเก่าใน GitHub)
+      // 👉 map ให้เป็น path ที่ถูกต้อง
+      return `/products-black-bb/${brandSlug}/${categoryLower}/${u}`;
+    });
+}
+brandsMap[brandSlug].categories[catKey].push({
+  brand_slug: brandSlug,
+  sku,
+  name,
+  price,
+  details: parseDetails(detailsRaw),
+  images,
+  order_link: orderLinkRaw || CONTACT_LINKS.line,
+  in_stock: inStock,
+  best_seller: bestSeller,
+});
+        });
+        setData({ brands: Object.values(brandsMap) });
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error(err);
+        setError("โหลดข้อมูลไม่สำเร็จ");
+        setLoading(false);
+      });
+  }, []);
+  const brands = data?.brands || [];
+  const activeBrand =
+    view === "brand"
+      ? brands.find((b) => b.slug === activeBrandSlug)
+      : null;
+  const handleBrandClick = (slug) => {
+  setActiveBrandSlug(slug);
+  setView("brand");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+};
+
+// รวมสินค้าทุกแบรนด์
+const allProducts = brands.flatMap((brand) =>
+  Object.values(brand.categories).flat().map((p) => ({
+    ...p,
+    brand_slug: brand.slug,
+  }))
+);
+
+// เฉพาะ Best Seller
+const bestSellers = allProducts.filter(
+  (p) => p.best_seller === 1
+);
+  return (
+    <div className="app">
+      <Header
+        onHome={() => {
+          setView("home");
+          setActiveBrandSlug(null);
+        }}
+        onBrands={() => {
+          setView("brands");
+          setActiveBrandSlug(null);
+        }}
+        onStock={() => {
+          setView("stock");
+          setActiveBrandSlug(null);
+        }}
+        currentView={view}
+      />
+      <main className="page">
+        {loading && <p className="status-text">กำลังโหลดสินค้า...</p>}
+        {error && !loading && (
+          <p className="status-text status-error">{error}</p>
+        )}
+        {!loading && !error && (
+          <>
+            {view === "home" && (
+  <HomeSection 
+    onShopNow={() => setView("brands")} 
+    brands={brands}
+    bestSellers={bestSellers}
+    allProducts={allProducts}
+    onSelectBrand={handleBrandClick}
+  />
+)}
+            {view === "brands" && (
+              <BrandsGrid brands={brands} onSelectBrand={handleBrandClick} />
+            )}
+            {view === "brand" && activeBrand && (
+              <BrandPage brand={activeBrand} />
+            )}
+            {view === "stock" && <StockPage brands={brands} />}
+          </>
+        )}
+      </main>
+      <ContactSection />
+      <Footer />
+    </div>
+  );
+}
+/* ---------------- HEADER ---------------- */
+function Header({ onHome, onBrands, onStock, currentView }) {
+  return (
+    <header className="site-header">
+      <div className="header-top">
+        <div className="header-top-inner">
+          <div className="header-top-logo" onClick={onHome}>
+            <img
+              src="/logo.png"
+              alt="mustmissme logo"
+              className="logo-image"
+            />
+          </div>
+          <div className="header-top-social">
+            <a
+              href={CONTACT_LINKS.instagram}
+              className="social-circle"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <img
+                src="/instagram.png"
+                alt="Instagram"
+                className="social-icon"
+              />
+            </a>
+            <a
+              href={CONTACT_LINKS.tiktok}
+              className="social-circle"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <img
+                src="/tiktok.png"
+                alt="TikTok"
+                className="social-icon"
+              />
+            </a>
+            <a
+              href={CONTACT_LINKS.shopee}
+              className="social-circle"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <img
+                src="/shopee.png"
+                alt="Shopee"
+                className="social-icon"
+              />
+            </a>
+          </div>
+        </div>
+      </div>
+      <div className="header-navbar">
+        <nav className="header-nav-inner">
+          <button
+            type="button"
+            className={`nav-item ${
+              currentView === "home" ? "nav-item--active" : ""
+            }`}
+            onClick={onHome}
+          >
+            HOMEPAGE
+          </button>
+          <button
+            type="button"
+            className={`nav-item ${
+              currentView === "brands" || currentView === "brand"
+                ? "nav-item--active"
+                : ""
+            }`}
+            onClick={onBrands}
+          >
+            BRANDS
+          </button>
+          <button
+            type="button"
+            className={`nav-item ${
+              currentView === "stock" ? "nav-item--active" : ""
+            }`}
+            onClick={onStock}
+          >
+            IN-STOCK
+          </button>
+        </nav>
+      </div>
+    </header>
+  );
+}
+/* ---------- HOMEPAGE ---------- */
+function HomeSection({
+  onShopNow,
+  brands,
+  bestSellers,
+  allProducts,
+  onSelectBrand,
+}) {
+  return (
+    <>
+      {/* HERO */}
+      <section className="home-section">
+        <div className="hero-card">
+          <img src="/hero.png" alt="hero" className="hero-image" />
+        </div>
+        <p className="home-intro">
+          MANDOTHING • Pre-order store for overseas brands
+          Worldwide shipping 🌐
+          Online store in Bangkok, Thailand
+        </p>
+        <button type="button" className="primary-btn" onClick={onShopNow}>
+          View All Brands
+        </button>
+      </section>
+
+      {/* BEST SELLER */}
+      {bestSellers.length > 0 && (
+  <section className="home-products">
+    <h2 className="section-title">Best Sellers</h2>
+
+    <div className="products-grid">
+      {bestSellers.map((p) => (
+        <ProductCard
+          key={p.sku}
+          product={p}
+          onClick={() => onSelectBrand(p.brand_slug)}
+        />
+      ))}
+    </div>
+  </section>
+)}
+
+      {/* ALL PRODUCTS */}
+      <section className="home-products">
+  <h2 className="section-title">All Products</h2>
+
+  <div className="products-grid">
+    {allProducts.map((p) => (
+      <ProductCard
+        key={p.sku}
+        product={p}
+        onClick={() => onSelectBrand(p.brand_slug)}
+      />
+    ))}
+  </div>
+</section>
+    </>
+  );
+}
+/* ---------- BRANDS GRID ---------- */
+function BrandsGrid({ brands, onSelectBrand }) {
+  const [brandCategory, setBrandCategory] = useState("ALL");
+  const [searchText, setSearchText] = useState("");
+
+  const categoryTabs = ["ALL", "CLOTHING", "SHOES", "BAG", "ACCESSORIES", "OTHER"];
+
+  const brandFiltered = brands.filter((b) => {
+    const matchCategory =
+      brandCategory === "ALL" || b.brand_category === brandCategory;
+    const text = (b.name || "").toLowerCase();
+    return matchCategory && text.includes(searchText.toLowerCase());
+  });
+
+  return (
+    <section className="brands-page">
+      <h1 className="section-title">Pre-Order Brands</h1>
+      <input
+        className="search-input brand-search-input"
+        placeholder="Search Brands..."
+        value={searchText}
+        onChange={(e) => setSearchText(e.target.value)}
+      />
+      <div className="brand-categories">
+        {categoryTabs.map((cat) => (
+          <button
+            key={cat}
+            type="button"
+            className={`brand-cat-btn ${
+              brandCategory === cat ? "brand-cat-btn--active" : ""
+            }`}
+            onClick={() => setBrandCategory(cat)}
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
+      <div className="brands-grid">
+        {brandFiltered.map((brand) => (
+          <button
+            key={brand.slug}
+            type="button"
+            className="brand-card"
+            onClick={() => onSelectBrand(brand.slug)}
+          >
+            <div className="brand-card-inner">
+              <div className="brand-logo-frame">
+                <img
+                  src={brand.logo}
+                  alt={brand.name}
+                  className="brand-logo"
+                />
+              </div>
+              <span className="brand-name">{brand.name}</span>
+            </div>
+          </button>
+        ))}
+        {brandFiltered.length === 0 && (
+          <p className="status-text">No brands found</p>
+        )}
+      </div>
+    </section>
+  );
+}
+/* ---------- BRAND PAGE ---------- */
+function BrandPage({ brand }) {
+  const [activeCategory, setActiveCategory] = useState("ALL");
+  const [search, setSearch] = useState("");
+
+  const categoriesOrder = [
+    "ALL",
+    "HOODIE",
+    "SWEATER",
+    "TOPS",
+    "BOTTOMS",
+    "JEANS",
+    "BAG",
+    "SHOES",
+    "ACCESSORIES",
+    "OTHER",
+  ];
+
+  const allProducts = Object.entries(brand.categories).flatMap(
+    ([cat, list]) =>
+      list.map((p) => ({
+        ...p,
+        _category: cat,
+        _brand: brand.slug, // ใช้ slug เพื่อ map รูปใน STOCK ด้วย
+      }))
+  );
+
+  const productsFiltered = allProducts.filter((p) => {
+    const matchCategory =
+      activeCategory === "ALL" || p._category === activeCategory;
+    const text = `${p.name} ${(p.details || []).join(" ")}`.toLowerCase();
+    return matchCategory && text.includes(search.toLowerCase());
+  });
+
+  return (
+    <section className="brand-page">
+      <div className="brand-header">
+        <img
+          src={brand.logo}
+          alt={brand.name}
+          className="brand-logo-big"
+        />
+        <h1 className="brand-title">{brand.name}</h1>
+        <a
+          className="brand-line-link"
+          href={brand.line_link}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Order via LINE
+        </a>
+      </div>
+      <div className="brand-layout">
+        <aside className="sidebar">
+          {categoriesOrder.map((cat) => (
+            <button
+              key={cat}
+              className={`sidebar-item ${
+                activeCategory === cat ? "is-active" : ""
+              }`}
+              onClick={() => setActiveCategory(cat)}
+            >
+              {cat === "ALL" ? "ALL" : cat}
+            </button>
+          ))}
+        </aside>
+        <div className="brand-content">
+          <input
+            className="search-input"
+            placeholder="Search within this brand..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <div className="products-grid">
+            {productsFiltered.map((p) => (
+              <ProductCard key={p.sku} product={p} />
+            ))}
+            {productsFiltered.length === 0 && (
+              <p className="status-text">No products in this category</p>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+/* ---------- IN-STOCK PAGE ---------- */
+function StockPage({ brands }) {
+  const [search, setSearch] = useState("");
+
+  const allProducts = brands.flatMap((brand) =>
+    Object.entries(brand.categories).flatMap(([cat, list]) =>
+      list.map((p) => ({
+        ...p,
+        _brand: brand.slug,
+        _category: cat,
+      }))
+    )
+  );
+
+  const stockProducts = allProducts.filter(
+    (p) => Number(p.in_stock) > 0
+  );
+
+  const filtered = stockProducts.filter((p) => {
+    const text = `${p.name} ${(p.details || []).join(" ")} ${p._brand}`.toLowerCase();
+    return text.includes(search.toLowerCase());
+  });
+
+  return (
+    <section className="stock-page">
+      <h1 className="section-title">In-Stock</h1>
+      <p className="section-subtitle">All Ready to Ship Products</p>
+      <div className="brand-search-wrapper">
+        <input
+          className="search-input brand-search-input"
+          placeholder="Search In-Stock Items..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
+      {filtered.length === 0 ? (
+        <p className="status-text">
+          ยังไม่ได้ตั้งค่าสินค้าพร้อมส่งในชีต
+          (ใส่ค่า 1 ในคอลัมน์ INSTOCK แถวสินค้าที่ต้องการ)
+        </p>
+      ) : (
+        <div className="products-grid">
+          {filtered.map((p) => (
+            <ProductCard key={`${p.sku}-stock`} product={p} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+/* ---------- PRODUCT CARD ---------- */
+function ProductCard({ product, onClick }) {
+  const images = product.images || [];
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const stripRef = useRef(null);
+
+  const handleScroll = () => {
+    if (!stripRef.current) return;
+    const { scrollLeft, clientWidth } = stripRef.current;
+    if (!clientWidth) return;
+    setCurrentIndex(Math.round(scrollLeft / clientWidth));
+  };
+
+  return (
+    <article className="product-card" onClick={onClick}>
+      <div className="carousel-container">
+        {images.length > 0 ? (
+          <>
+            <div
+              className="carousel-strip"
+              ref={stripRef}
+              onScroll={handleScroll}
+            >
+              {images.map((src, i) => (
+                <img
+                  key={i}
+                  src={src}               // ✅ ใช้ path ที่ถูกส่งมาโดยตรง
+                  alt={product.name}
+                  className="carousel-image"
+                />
+              ))}
+            </div>
+
+            {images.length > 1 && (
+              <div className="carousel-dots">
+                {images.map((_, i) => (
+                  <span
+                    key={i}
+                    className={`dot ${i === currentIndex ? "active" : ""}`}
+                  />
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="product-image placeholder">ไม่มีรูป</div>
+        )}
+      </div>
+
+      <div className="product-body">
+        {product._brand && (
+          <p className="product-brand">{product._brand}</p>
+        )}
+        <h3 className="product-name">{product.name}</h3>
+        <p className="product-price">
+          ฿{product.price?.toLocaleString("th-TH")}
+        </p>
+        <ul className="product-details">
+          {product.details?.map((d, i) => (
+            <li key={i}>{d}</li>
+          ))}
+        </ul>
+        <a
+          className="primary-btn full-width"
+          href={product.order_link}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Order via LINE
+        </a>
+      </div>
+    </article>
+  );
+}
+      
+/* ---------- CONTACT SECTION ---------- */
+function ContactSection() {
+  return (
+    <section className="contact-section">
+      <h2 className="contact-title">CONTACT</h2>
+      <div className="contact-links">
+        <a
+          href={CONTACT_LINKS.instagram}
+          target="_blank"
+          rel="noreferrer"
+          className="contact-link"
+        >
+          <span>Instagram : mustmissme.preorder</span>
+        </a>
+        <a
+          href={CONTACT_LINKS.line}
+          target="_blank"
+          rel="noreferrer"
+          className="contact-link"
+        >
+          <span>LINE : @mandothing</span>
+        </a>
+        <a
+          href={CONTACT_LINKS.tiktok}
+          target="_blank"
+          rel="noreferrer"
+          className="contact-link"
+        >
+          <span>TikTok : mustmissme.preorder</span>
+        </a>
+        <a
+          href={CONTACT_LINKS.shopee}
+          target="_blank"
+          rel="noreferrer"
+          className="contact-link"
+        >
+          <span>Shopee : mustmissme</span>
+        </a>
+      </div>
+    </section>
+  );
+}
+
+/* ---------- FOOTER ---------- */
+function Footer() {
+  return (
+    <footer className="site-footer">
+      <p>
+        © 2026 MANDOTHING · ร้านพรีออเดอร์สินค้านำเข้าจากต่างประเทศ 
+      </p>
+    </footer>
+  );
+}
+
+export default App;
